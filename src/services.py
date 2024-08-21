@@ -1,40 +1,45 @@
 import datetime
 import json
+import logging
 from typing import Any, Dict, List
 
-# from src.date import month
-from src.utils import read_excel
+logger = logging.getLogger("services.log")
+file_handler = logging.FileHandler("services.log", "w")
+file_formatter = logging.Formatter("%(asctime)s %(levelname)s: %(message)s")
+file_handler.setFormatter(file_formatter)
+logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
 
 
-def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int):
-    """Функция, возвращающая сумму, которую можно было бы отложить в Инвесткопилку
-    в заданном месяце года при заданном округлении"""
-    # month_choice = month(0)
-
-    operations = []
-    for transaction in transactions:
-        date_excel = transaction["Дата операции"]
-        operation_data = datetime.datetime.strptime(date_excel, "%d.%m.%Y %H:%M:%S")
-        format_date = operation_data.strftime("%Y-%m-%d %H:%M:%S")
-        transaction["Дата операции"] = format_date
-        if month in transaction["Дата операции"]:
-            operations.append(transaction)
-    # print(operations)
-    total_investment = 0
-    for operation in operations:
-        amount = operation["Сумма операции"]
-        ceshback = amount * -1 // limit * -1 * limit
-        investment = ceshback - amount
-        operation["Кэшбэк"] = investment  # заполняем в словаре значение кешбэка
-        # суммируем кэшбэк за указанный месяц
-        total_investment += investment
-        total_investment = round(total_investment, 2)
-
-    print(
-        f"Итого за {month} в инвесткопилку была бы отложена сумма {total_investment} руб."
+def investment_bank(month: str, transactions: List[Dict[str, Any]], limit: int) -> str:
+    """Рассчитывает сумму на счету инвесткопилки по заданному порогу округления"""
+    logger.info("Start")
+    period = datetime.datetime.strptime(month, "%Y-%m")
+    logger.info("Creating filtered transactions list")
+    transactions_list = []
+    investment_bank_sum = 0
+    logger.info(
+        "Filtering transactions by date and putting their sum into filtered transactions list"
     )
-    return total_investment
+    for transaction in transactions:
+        transaction_date = transaction["operation_date"]
+        payment_date = datetime.datetime.strptime(transaction_date, "%d.%m.%Y %H:%M:%S")
+        if payment_date.month == period.month and transaction["payment_sum"] < 0:
+            transactions_list.append(transaction["payment_sum"])
+    logger.info("Calculating remaining sum for investment bank")
+    for transact in transactions_list:
+        sum = abs(transact)
+        diff = (sum // limit + 1) * limit - sum
+        investment_bank_sum += diff
+    logger.info("Creating json-file with sum for investment bank")
+    result_list = []
+    result_dict = {}
+    result_dict["investment_bank"] = round(investment_bank_sum, 2)
+    result_list.append(result_dict)
+    result_list_jsons = json.dumps(result_list)
+    logger.info("Stop")
+    return result_list_jsons
 
-
-if __name__ == "__main__":
-    investment_bank()
+# transactions = get_xlsx_data_dict("../data/operations.xlsx")
+# result = investment_bank("2021-12", transactions, 50)
+# print(result)
